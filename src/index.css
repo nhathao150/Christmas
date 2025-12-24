@@ -1,0 +1,109 @@
+/* src/index.css */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+
+/* --- CẤU HÌNH CƠ BẢN --- */
+body, html {
+  margin: 0; padding: 0; width: 100%; height: 100%;
+  background-color: #000000; overflow: hidden;
+  font-family: 'Cinzel', serif;
+}
+
+#root, #canvas-container {
+  width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1;
+}
+
+/* --- UI CHÍNH --- */
+#ui-layer {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 10;
+  display: flex; flex-direction: column; align-items: center; padding-top: 40px;
+}
+
+h1 {
+  color: #fceea7; font-size: 50px; margin: 0 0 20px 0;
+  text-shadow: 0 0 20px rgba(252, 238, 167, 0.5);
+  letter-spacing: 5px; text-align: center;
+}
+
+.upload-wrapper {
+  pointer-events: auto; text-align: center;
+  display: flex; gap: 15px; align-items: center; justify-content: center;
+}
+
+/* --- NÚT BẤM (Upload/Delete) --- */
+.upload-btn {
+  background: rgba(0, 0, 0, 0.6); border: 1px solid #d4af37; color: #d4af37;
+  min-width: 140px; height: 40px;
+  display: inline-flex; justify-content: center; align-items: center;
+  margin: 0 10px; font-family: 'Cinzel', serif; font-size: 14px;
+  text-transform: uppercase; letter-spacing: 2px;
+  cursor: pointer; transition: all 0.3s ease; backdrop-filter: blur(4px);
+  box-sizing: border-box;
+}
+.upload-btn:hover {
+  background: #d4af37; color: #000; box-shadow: 0 0 15px rgba(212, 175, 55, 0.6);
+}
+input[type="file"] { display: none; }
+
+/* --- POPUP HƯỚNG DẪN (MỚI) --- */
+.popup-overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.85); /* Nền tối làm nổi bật popup */
+  z-index: 200; /* Cao hơn mọi thứ */
+  display: flex; justify-content: center; align-items: center;
+  backdrop-filter: blur(8px);
+}
+
+.popup-content {
+  background: rgba(10, 10, 10, 0.95);
+  border: 2px solid #d4af37;
+  padding: 40px;
+  text-align: center;
+  border-radius: 4px;
+  box-shadow: 0 0 50px rgba(212, 175, 55, 0.2);
+  max-width: 500px;
+  width: 90%;
+  animation: fadeIn 0.5s ease;
+}
+
+.popup-title {
+  color: #fceea7; font-size: 30px; margin-bottom: 30px;
+  letter-spacing: 4px; border-bottom: 1px solid #d4af37;
+  padding-bottom: 15px; display: inline-block;
+}
+
+.guide-row {
+  display: flex; align-items: center; justify-content: flex-start;
+  margin: 15px 0; color: #d4af37; font-size: 18px;
+  text-align: left; padding-left: 20px;
+}
+
+.guide-icon { font-size: 30px; margin-right: 20px; width: 40px; text-align: center; }
+
+.popup-btn-ok {
+  margin-top: 30px;
+  background: #d4af37; color: #000;
+  border: none; padding: 12px 40px;
+  font-size: 16px; font-weight: bold;
+  font-family: 'Cinzel', serif; letter-spacing: 2px;
+  cursor: pointer; transition: all 0.3s;
+}
+.popup-btn-ok:hover {
+  background: #fff; box-shadow: 0 0 20px #d4af37;
+}
+
+@keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+/* --- LOADER --- */
+#loader {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: #000; z-index: 100;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.loader-text { color: #d4af37; margin-top: 15px; letter-spacing: 3px; }
+.spinner {
+  width: 40px; height: 40px; border: 2px solid #333;
+  border-top: 2px solid #d4af37; border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }

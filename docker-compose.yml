@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  mysqldb:
+    image: mysql:8.0
+    container_name: christmas_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: christmas_db
+    ports:
+      - "3307:3306" # Map cổng 3307 ngoài máy bạn vào 3306 của container
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
