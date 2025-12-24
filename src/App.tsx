@@ -15,12 +15,39 @@ const CONFIG = {
         bg: 0x000000, 
         champagneGold: 0xffd966, 
         deepGreen: 0x03180a,     
-        accentRed: 0x990000,     
+        accentRed: 0x990000,
+        pinkHeart: 0xff69b4,
+        pinkGlow: 0xff1493
     },
     particles: { count: 1500, treeHeight: 24, treeRadius: 8 },
     snow: { count: 800, range: 100, speed: 0.1 },
     camera: { z: 50 }
 };
+
+// --- HÀM TÍNH TOÁN HÌNH TRÁI TIM LẤP ĐẦY (NEW) ---
+function calculateFilledHeartShape(scaleGlobal: number) {
+    // 1. Góc ngẫu nhiên vòng quanh
+    const t = Math.random() * Math.PI * 2;
+
+    // 2. Tính toán vị trí trên ĐƯỜNG VIỀN
+    const xBoundary = 16 * Math.pow(Math.sin(t), 3);
+    const yBoundary = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+
+    // 3. Tạo độ lấp đầy (Random từ tâm ra viền)
+    // Dùng căn bậc 2 của số ngẫu nhiên để hạt phân bố đều
+    const internalScale = Math.sqrt(Math.random());
+
+    // 4. Tạo độ dày 3D (Z)
+    // Hạt càng gần tâm (internalScale nhỏ) thì càng phồng to (Z lớn)
+    const zThickness = (1 - internalScale * 0.8) * (Math.random() - 0.5) * 10;
+
+    // 5. Kết hợp lại: Vị trí viền * tỷ lệ lấp đầy * tỷ lệ chung
+    return new THREE.Vector3(
+        xBoundary * internalScale * scaleGlobal,
+        yBoundary * internalScale * scaleGlobal,
+        zThickness
+    );
+}
 
 const App = () => {
     const mountRef = useRef<HTMLDivElement>(null);
@@ -43,7 +70,7 @@ const App = () => {
         const AI_INTERVAL = 100;
 
         const STATE = { 
-            mode: 'TREE', 
+            mode: 'TREE', // TREE | SCATTER | FOCUS | HEART
             focusTarget: null as THREE.Object3D | null, 
             hand: { detected: false, x: 0, y: 0 }, 
             rotation: { x: 0, y: 0 } 
@@ -57,8 +84,11 @@ const App = () => {
             type: string;
             posTree = new THREE.Vector3();
             posScatter = new THREE.Vector3();
+            posHeart = new THREE.Vector3();
             baseScale: number;
             spinSpeed: THREE.Vector3;
+            originalMaterial: THREE.Material | THREE.Material[];
+            heartMaterial: THREE.Material;
 
             constructor(mesh: THREE.Mesh | THREE.Group, type: string) {
                 this.mesh = mesh;
@@ -66,10 +96,28 @@ const App = () => {
                 this.baseScale = mesh.scale.x;
                 const speedMult = (type === 'PHOTO') ? 0.3 : 2.0;
                 this.spinSpeed = new THREE.Vector3((Math.random()-0.5)*speedMult, (Math.random()-0.5)*speedMult, (Math.random()-0.5)*speedMult);
+                
+                if (mesh instanceof THREE.Mesh) {
+                    this.originalMaterial = mesh.material;
+                    this.heartMaterial = new THREE.MeshStandardMaterial({
+                        color: CONFIG.colors.pinkHeart,
+                        emissive: CONFIG.colors.pinkGlow,
+                        emissiveIntensity: 0.5,
+                        metalness: 0.8,
+                        roughness: 0.2
+                    });
+                    if (type === 'CANE') {
+                        this.heartMaterial = new THREE.MeshStandardMaterial({
+                            map: caneTexture, color: CONFIG.colors.pinkHeart, roughness: 0.4
+                        });
+                    }
+                }
+
                 this.calculatePositions();
             }
 
             calculatePositions() {
+                // Vị trí Cây
                 const h = CONFIG.particles.treeHeight;
                 let t = Math.pow(Math.random(), 0.8);
                 const y = (t * h) - (h / 2);
@@ -79,6 +127,7 @@ const App = () => {
                 const r = rMax * (0.8 + Math.random() * 0.4);
                 this.posTree.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
 
+                // Vị trí Nổ
                 let rScatter = (8 + Math.random()*12);
                 const theta = Math.random() * Math.PI * 2;
                 const phi = Math.acos(2 * Math.random() - 1);
@@ -87,14 +136,33 @@ const App = () => {
                     rScatter * Math.sin(phi) * Math.sin(theta),
                     rScatter * Math.cos(phi)
                 );
+
+                // Vị trí Trái tim (Lấp đầy) - Gọi hàm mới không cần tham số góc
+                this.posHeart = calculateFilledHeartShape(0.8);
             }
 
             update(dt: number) {
                 let target = this.posTree;
+                let currentMode = STATE.mode;
 
-                if (STATE.mode === 'SCATTER') {
+                if (this.mesh instanceof THREE.Mesh && this.type !== 'PHOTO') {
+                    if (currentMode === 'HEART') {
+                        if (this.mesh.material !== this.heartMaterial) {
+                            this.mesh.material = this.heartMaterial;
+                        }
+                        (this.mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.5 + Math.sin(clock.elapsedTime * 3) * 0.2;
+                    } else {
+                        if (this.mesh.material !== this.originalMaterial) {
+                            this.mesh.material = this.originalMaterial;
+                        }
+                    }
+                }
+
+                if (currentMode === 'SCATTER') {
                     target = this.posScatter;
-                } else if (STATE.mode === 'FOCUS' && STATE.focusTarget) {
+                } else if (currentMode === 'HEART') {
+                    target = this.posHeart;
+                } else if (currentMode === 'FOCUS' && STATE.focusTarget) {
                     if (this.mesh === STATE.focusTarget) {
                         const desiredWorldPos = new THREE.Vector3(0, 2, 35);
                         const invMatrix = new THREE.Matrix4().copy(mainGroupRef.current!.matrixWorld).invert();
@@ -104,23 +172,25 @@ const App = () => {
                     }
                 }
 
-                const lerpSpeed = (STATE.mode === 'FOCUS' && this.mesh === STATE.focusTarget) ? 5.0 : 3.0;
+                const lerpSpeed = (currentMode === 'FOCUS' && this.mesh === STATE.focusTarget) ? 5.0 : (currentMode === 'HEART' ? 2.5 : 3.0);
                 this.mesh.position.lerp(target, lerpSpeed * dt);
 
-                if (STATE.mode === 'SCATTER') {
+                if (currentMode === 'SCATTER') {
                     this.mesh.rotation.x += this.spinSpeed.x * dt;
                     this.mesh.rotation.y += this.spinSpeed.y * dt;
-                } else if (STATE.mode === 'FOCUS' && this.mesh === STATE.focusTarget) {
+                } else if (currentMode === 'FOCUS' && this.mesh === STATE.focusTarget) {
                      this.mesh.lookAt(camera.position);
                 } else {
                     this.mesh.rotation.y += 0.5 * dt;
                 }
                 
                 let s = this.baseScale;
-                if (STATE.mode === 'SCATTER' && this.type === 'PHOTO') s = this.baseScale * 2.5;
-                else if (STATE.mode === 'FOCUS') {
+                if (currentMode === 'SCATTER' && this.type === 'PHOTO') s = this.baseScale * 2.5;
+                else if (currentMode === 'FOCUS') {
                     if (this.mesh === STATE.focusTarget) s = 4.5;
                     else s = this.baseScale * 0.5;
+                } else if (currentMode === 'HEART') {
+                    s = this.baseScale * 1.2;
                 }
                 this.mesh.scale.lerp(new THREE.Vector3(s,s,s), 4*dt);
             }
@@ -245,7 +315,8 @@ const App = () => {
                 const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
                 handLandmarker = await HandLandmarker.createFromOptions(vision, {
                     baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task", delegate: "GPU" },
-                    runningMode: "VIDEO", numHands: 1
+                    runningMode: "VIDEO", 
+                    numHands: 2
                 });
             } catch (e) { console.error("AI Error:", e); }
 
@@ -259,45 +330,56 @@ const App = () => {
                         lastAiCheckTime = now;
                         const results = handLandmarker.detectForVideo(video, now);
                         
+                        let newMode = STATE.mode;
+                        STATE.hand.detected = false;
+
                         if (results.landmarks.length > 0) {
                             STATE.hand.detected = true;
-                            const lm = results.landmarks[0];
-                            const thumb = lm[4]; const index = lm[8]; const wrist = lm[0];
-                            
-                            const pinchDist = Math.hypot(thumb.x - index.x, thumb.y - index.y);
-                            const tips = [lm[8], lm[12], lm[16], lm[20]];
-                            let avgDist = 0;
-                            tips.forEach(t => avgDist += Math.hypot(t.x - wrist.x, t.y - wrist.y));
-                            avgDist /= 4;
+                            const hand1 = results.landmarks[0];
 
-                            let newMode = STATE.mode;
+                            const thumb1 = hand1[4]; const index1 = hand1[8]; const wrist1 = hand1[0];
+                            const pinchDist = Math.hypot(thumb1.x - index1.x, thumb1.y - index1.y);
+                            const tips1 = [hand1[8], hand1[12], hand1[16], hand1[20]];
+                            let avgDist1 = 0;
+                            tips1.forEach(t => avgDist1 += Math.hypot(t.x - wrist1.x, t.y - wrist1.y));
+                            avgDist1 /= 4;
 
-                            if (pinchDist < 0.05) {
-                                newMode = 'FOCUS';
-                                if (STATE.mode !== 'FOCUS') {
-                                     const photos = particleSystemRef.current.filter(p => p.type === 'PHOTO');
-                                     if (photos.length) STATE.focusTarget = photos[Math.floor(Math.random()*photos.length)].mesh;
+                            if (pinchDist < 0.05) newMode = 'FOCUS';
+                            else if (avgDist1 < 0.25) newMode = 'TREE';
+                            else if (avgDist1 > 0.35) newMode = 'SCATTER';
+
+                            STATE.rotation.y = (hand1[9].x - 0.5) * Math.PI * 2; 
+
+                            if (results.landmarks.length === 2) {
+                                const hand2 = results.landmarks[1];
+                                const thumb2 = hand2[4]; const index2 = hand2[8];
+                                const thumbGap = Math.hypot(thumb1.x - thumb2.x, thumb1.y - thumb2.y);
+                                const indexGap = Math.hypot(index1.x - index2.x, index1.y - index2.y);
+
+                                if (thumbGap < 0.1 && indexGap < 0.1) {
+                                    newMode = 'HEART';
                                 }
-                            } else if (avgDist < 0.25) {
-                                newMode = 'TREE';
-                                STATE.focusTarget = null;
-                            } else if (avgDist > 0.35) {
-                                newMode = 'SCATTER';
-                                STATE.focusTarget = null;
                             }
+
+                            if (newMode === 'FOCUS' && STATE.mode !== 'FOCUS') {
+                                 const photos = particleSystemRef.current.filter(p => p.type === 'PHOTO');
+                                 if (photos.length) STATE.focusTarget = photos[Math.floor(Math.random()*photos.length)].mesh;
+                            }
+                            if (newMode !== 'FOCUS') STATE.focusTarget = null;
                             
                             if (STATE.mode !== newMode) STATE.mode = newMode;
-
-                            const targetRotY = (lm[9].x - 0.5) * Math.PI * 2;
-                            STATE.rotation.y = targetRotY; 
                         }
                     }
                 }
 
-                if (STATE.hand.detected) {
-                    mainGroup.rotation.y += (STATE.rotation.y - mainGroup.rotation.y) * 3.0 * dt;
+                if (STATE.mode !== 'HEART') {
+                    if (STATE.hand.detected) {
+                        mainGroup.rotation.y += (STATE.rotation.y - mainGroup.rotation.y) * 3.0 * dt;
+                    } else {
+                        mainGroup.rotation.y += 0.3 * dt;
+                    }
                 } else {
-                    mainGroup.rotation.y += 0.2 * dt;
+                     mainGroup.rotation.y += 0.5 * dt;
                 }
 
                 particleSystemRef.current.forEach(p => p.update(dt));
@@ -391,11 +473,16 @@ const App = () => {
                     (10 + Math.random()*10) * Math.sin(Math.random()*6) * Math.sin(Math.random()*6),
                     (10 + Math.random()*10) * Math.cos(Math.random()*6)
                 ),
+                // Gọi hàm mới cho ảnh
+                posHeart: calculateFilledHeartShape(0.8),
                 spinSpeed: new THREE.Vector3(0,0,0),
                 update: function(dt: number) {
                     let target = this.posTree;
-                    if (STATE.mode === 'SCATTER') target = this.posScatter;
-                    else if (STATE.mode === 'FOCUS' && STATE.focusTarget) {
+                    const currentMode = STATE.mode;
+
+                    if (currentMode === 'SCATTER') target = this.posScatter;
+                    else if (currentMode === 'HEART') target = this.posHeart;
+                    else if (currentMode === 'FOCUS' && STATE.focusTarget) {
                         if (this.mesh === STATE.focusTarget) {
                             const desiredWorldPos = new THREE.Vector3(0, 2, 35);
                             const invMatrix = new THREE.Matrix4().copy(mainGroupRef.current!.matrixWorld).invert();
@@ -407,17 +494,18 @@ const App = () => {
 
                     this.mesh.position.lerp(target, 3.0 * dt);
                     
-                    if (STATE.mode === 'SCATTER') {
+                    if (currentMode === 'SCATTER') {
                          this.mesh.rotation.y += dt;
-                    } else if (STATE.mode === 'FOCUS' && this.mesh === STATE.focusTarget) {
+                    } else if (currentMode === 'FOCUS' && this.mesh === STATE.focusTarget) {
                          this.mesh.lookAt(camera.position);
                     } else {
                          this.mesh.rotation.y += 0.5 * dt;
                     }
 
                     let s = this.baseScale;
-                    if (STATE.mode === 'SCATTER') s = this.baseScale * 2.5;
-                    else if (STATE.mode === 'FOCUS') {
+                    if (currentMode === 'SCATTER') s = this.baseScale * 2.5;
+                    else if (currentMode === 'HEART') s = this.baseScale * 1.2;
+                    else if (currentMode === 'FOCUS') {
                         if (this.mesh === STATE.focusTarget) s = 4.5;
                         else s = this.baseScale * 0.5;
                     }
@@ -490,7 +578,11 @@ const App = () => {
                         </div>
                         <div className="guide-row">
                             <span className="guide-icon">👌</span>
-                            <span><b>Chụm (Cái + Trỏ):</b> Xem ảnh (Focus Mode)</span>
+                            <span><b>Chụm 1 tay:</b> Xem ảnh (Focus Mode)</span>
+                        </div>
+                        <div className="guide-row">
+                            <span className="guide-icon">🫶</span>
+                            <span><b>Ghép 2 tay (Tim):</b> Hóa trái tim hồng!</span>
                         </div>
 
                         <button className="popup-btn-ok" onClick={handleCloseInstructions}>

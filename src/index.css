@@ -74,11 +74,29 @@ input[type="file"] { display: none; }
 
 .guide-row {
   display: flex; align-items: center; justify-content: flex-start;
-  margin: 15px 0; color: #d4af37; font-size: 18px;
-  text-align: left; padding-left: 20px;
+  margin: 18px 0; 
+  color: #e0e0e0; 
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+  font-size: 16px;
+  line-height: 1.5;
+  text-align: left; 
+  padding-left: 10px;
+  letter-spacing: 0.5px;
 }
 
-.guide-icon { font-size: 30px; margin-right: 20px; width: 40px; text-align: center; }
+.guide-row b {
+  color: #d4af37; 
+  margin-right: 8px;
+  font-weight: 600;
+}
+
+/* Cập nhật cho icon */
+.guide-icon { 
+  font-size: 28px; 
+  margin-right: 25px; 
+  width: 35px; /* Tăng chiều rộng xíu để vừa icon trái tim */
+  text-align: center; 
+}
 
 .popup-btn-ok {
   margin-top: 30px;
