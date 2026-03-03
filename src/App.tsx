@@ -24,24 +24,17 @@ const CONFIG = {
     camera: { z: 50 }
 };
 
-// --- HÀM TÍNH TOÁN HÌNH TRÁI TIM LẤP ĐẦY (NEW) ---
-function calculateFilledHeartShape(scaleGlobal: number) {
-    // 1. Góc ngẫu nhiên vòng quanh
-    const t = Math.random() * Math.PI * 2;
+// --- SHARED OBJECTS để tái sử dụng mỗi frame (tránh GC pressure) ---
+const _scaleVec = new THREE.Vector3();
+const _invMatrix = new THREE.Matrix4();
 
-    // 2. Tính toán vị trí trên ĐƯỜNG VIỀN
+// --- HÀM TÍNH TOÁN HÌNH TRÁI TIM LẤP ĐẦY ---
+function calculateFilledHeartShape(scaleGlobal: number) {
+    const t = Math.random() * Math.PI * 2;
     const xBoundary = 16 * Math.pow(Math.sin(t), 3);
     const yBoundary = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
-
-    // 3. Tạo độ lấp đầy (Random từ tâm ra viền)
-    // Dùng căn bậc 2 của số ngẫu nhiên để hạt phân bố đều
     const internalScale = Math.sqrt(Math.random());
-
-    // 4. Tạo độ dày 3D (Z)
-    // Hạt càng gần tâm (internalScale nhỏ) thì càng phồng to (Z lớn)
     const zThickness = (1 - internalScale * 0.8) * (Math.random() - 0.5) * 10;
-
-    // 5. Kết hợp lại: Vị trí viền * tỷ lệ lấp đầy * tỷ lệ chung
     return new THREE.Vector3(
         xBoundary * internalScale * scaleGlobal,
         yBoundary * internalScale * scaleGlobal,
@@ -49,10 +42,33 @@ function calculateFilledHeartShape(scaleGlobal: number) {
     );
 }
 
+// --- TOAST NOTIFICATION ---
+function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
+    const existing = document.getElementById('toast-notification');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'toast-notification';
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    // Trigger animation
+    requestAnimationFrame(() => {
+        toast.classList.add('toast-show');
+    });
+
+    setTimeout(() => {
+        toast.classList.remove('toast-show');
+        setTimeout(() => toast.remove(), 400);
+    }, 3000);
+}
+
 const App = () => {
     const mountRef = useRef<HTMLDivElement>(null);
     const [loading, setLoading] = useState(true);
     const [showInstructions, setShowInstructions] = useState(true);
+    const [isUploading, setIsUploading] = useState(false);
 
     const sceneRef = useRef<THREE.Scene | null>(null);
     const mainGroupRef = useRef<THREE.Group | null>(null);
@@ -67,7 +83,8 @@ const App = () => {
         let handLandmarker: any, video: HTMLVideoElement;
         
         let lastAiCheckTime = 0;
-        const AI_INTERVAL = 100;
+        // [PERF #4] Tăng interval từ 100ms → 150ms để giảm tải CPU
+        const AI_INTERVAL = 150;
 
         const STATE = { 
             mode: 'TREE', // TREE | SCATTER | FOCUS | HEART
@@ -117,7 +134,6 @@ const App = () => {
             }
 
             calculatePositions() {
-                // Vị trí Cây
                 const h = CONFIG.particles.treeHeight;
                 let t = Math.pow(Math.random(), 0.8);
                 const y = (t * h) - (h / 2);
@@ -127,7 +143,6 @@ const App = () => {
                 const r = rMax * (0.8 + Math.random() * 0.4);
                 this.posTree.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
 
-                // Vị trí Nổ
                 let rScatter = (8 + Math.random()*12);
                 const theta = Math.random() * Math.PI * 2;
                 const phi = Math.acos(2 * Math.random() - 1);
@@ -137,7 +152,6 @@ const App = () => {
                     rScatter * Math.cos(phi)
                 );
 
-                // Vị trí Trái tim (Lấp đầy) - Gọi hàm mới không cần tham số góc
                 this.posHeart = calculateFilledHeartShape(0.8);
             }
 
@@ -165,8 +179,9 @@ const App = () => {
                 } else if (currentMode === 'FOCUS' && STATE.focusTarget) {
                     if (this.mesh === STATE.focusTarget) {
                         const desiredWorldPos = new THREE.Vector3(0, 2, 35);
-                        const invMatrix = new THREE.Matrix4().copy(mainGroupRef.current!.matrixWorld).invert();
-                        target = desiredWorldPos.applyMatrix4(invMatrix);
+                        // [PERF #6] Tái sử dụng _invMatrix thay vì tạo mới mỗi frame
+                        _invMatrix.copy(mainGroupRef.current!.matrixWorld).invert();
+                        target = desiredWorldPos.applyMatrix4(_invMatrix);
                     } else {
                         target = this.posScatter;
                     }
@@ -192,7 +207,9 @@ const App = () => {
                 } else if (currentMode === 'HEART') {
                     s = this.baseScale * 1.2;
                 }
-                this.mesh.scale.lerp(new THREE.Vector3(s,s,s), 4*dt);
+                // [PERF #1] Tái sử dụng _scaleVec thay vì new THREE.Vector3() mỗi frame
+                _scaleVec.set(s, s, s);
+                this.mesh.scale.lerp(_scaleVec, 4*dt);
             }
         }
 
@@ -232,8 +249,9 @@ const App = () => {
             scene.add(spotGold);
 
             const renderScene = new RenderPass(scene, camera);
+            // [PERF #2] Giảm bloom resolution xuống 1/3 để tiết kiệm GPU
             const bloomPass = new UnrealBloomPass(
-                new THREE.Vector2(window.innerWidth/2, window.innerHeight/2),
+                new THREE.Vector2(Math.round(window.innerWidth/3), Math.round(window.innerHeight/3)),
                 1.5, 0.4, 0.85
             );
             bloomPass.threshold = 0.6;
@@ -417,6 +435,15 @@ const App = () => {
         const handleFileUpload = async (e: any) => {
             const files = e.target.files;
             if (!files.length) return;
+
+            // [UI #9] Disable nút và hiện trạng thái đang upload
+            const fileInput = document.getElementById('file-input') as HTMLInputElement;
+            const uploadLabel = document.querySelector('.upload-btn') as HTMLElement;
+            if (uploadLabel) uploadLabel.classList.add('btn-loading');
+            
+            showToast('Đang tải ảnh lên...', 'info');
+
+            let successCount = 0;
             for (const file of Array.from(files) as File[]) {
                 const formData = new FormData();
                 formData.append('photo', file);
@@ -428,9 +455,21 @@ const App = () => {
                             tex.colorSpace = THREE.SRGBColorSpace;
                             addPhotoToScene(tex);
                         });
+                        successCount++;
                     }
-                } catch (err) { alert("Lỗi kết nối Server Backend!"); }
+                } catch (err) {
+                    // [UI #7] Thay alert() bằng toast notification
+                    showToast('Lỗi kết nối Server Backend!', 'error');
+                }
             }
+
+            if (successCount > 0) {
+                showToast(`🎄 Đã thêm ${successCount} ảnh lên cây thông!`, 'success');
+            }
+
+            // Re-enable nút
+            if (uploadLabel) uploadLabel.classList.remove('btn-loading');
+            if (fileInput) fileInput.value = '';
         };
 
         const handleReset = async () => {
@@ -441,7 +480,7 @@ const App = () => {
                     while(photoMeshGroupRef.current.children.length > 0) photoMeshGroupRef.current.remove(photoMeshGroupRef.current.children[0]);
                     particleSystemRef.current = particleSystemRef.current.filter(p => p.type !== 'PHOTO');
                 }
-                alert("Đã xóa sạch!");
+                showToast('🗑️ Đã xóa sạch ảnh!', 'info');
             } catch (err) { console.error(err); }
         };
 
@@ -473,7 +512,6 @@ const App = () => {
                     (10 + Math.random()*10) * Math.sin(Math.random()*6) * Math.sin(Math.random()*6),
                     (10 + Math.random()*10) * Math.cos(Math.random()*6)
                 ),
-                // Gọi hàm mới cho ảnh
                 posHeart: calculateFilledHeartShape(0.8),
                 spinSpeed: new THREE.Vector3(0,0,0),
                 update: function(dt: number) {
@@ -485,8 +523,9 @@ const App = () => {
                     else if (currentMode === 'FOCUS' && STATE.focusTarget) {
                         if (this.mesh === STATE.focusTarget) {
                             const desiredWorldPos = new THREE.Vector3(0, 2, 35);
-                            const invMatrix = new THREE.Matrix4().copy(mainGroupRef.current!.matrixWorld).invert();
-                            target = desiredWorldPos.applyMatrix4(invMatrix);
+                            // [PERF #6] Tái sử dụng _invMatrix
+                            _invMatrix.copy(mainGroupRef.current!.matrixWorld).invert();
+                            target = desiredWorldPos.applyMatrix4(_invMatrix);
                         } else {
                             target = this.posScatter;
                         }
@@ -509,18 +548,23 @@ const App = () => {
                         if (this.mesh === STATE.focusTarget) s = 4.5;
                         else s = this.baseScale * 0.5;
                     }
-                    this.mesh.scale.lerp(new THREE.Vector3(s,s,s), 4*dt);
+                    // [PERF #1] Tái sử dụng _scaleVec
+                    _scaleVec.set(s, s, s);
+                    this.mesh.scale.lerp(_scaleVec, 4*dt);
                 }
             };
             group.scale.set(0,0,0);
             photoMeshGroupRef.current.add(group);
             particleSystemRef.current.push(particleMock);
+
+            // [PERF #5] Dùng requestAnimationFrame thay vì setInterval cho popup animation
             let scale = 0;
-            const popUp = setInterval(() => {
+            const popUp = () => {
                 scale += 0.05;
                 group.scale.set(scale, scale, scale);
-                if (scale >= 0.8) clearInterval(popUp);
-            }, 16);
+                if (scale < 0.8) requestAnimationFrame(popUp);
+            };
+            requestAnimationFrame(popUp);
         };
 
         init();
@@ -602,7 +646,7 @@ const App = () => {
                 <h1 id="title-noel">MERRY CHRISTMAS</h1>
                 <div className="upload-wrapper">
                     <div style={{display: 'flex', gap: '10px', justifyContent: 'center'}}>
-                        <label className="upload-btn">
+                        <label className="upload-btn" id="upload-label">
                             THÊM ẢNH
                             <input type="file" id="file-input" multiple accept="image/*" />
                         </label>

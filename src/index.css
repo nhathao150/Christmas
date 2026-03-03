@@ -19,10 +19,20 @@ body, html {
   display: flex; flex-direction: column; align-items: center; padding-top: 40px;
 }
 
+/* [UI #8] Tiêu đề với glow pulse animation + [UI #10] Responsive font-size */
 h1 {
-  color: #fceea7; font-size: 50px; margin: 0 0 20px 0;
-  text-shadow: 0 0 20px rgba(252, 238, 167, 0.5);
+  color: #fceea7;
+  /* [UI #10] Responsive: clamp(min, preferred, max) */
+  font-size: clamp(24px, 5vw, 50px);
+  margin: 0 0 20px 0;
   letter-spacing: 5px; text-align: center;
+  /* [UI #8] Glow pulse animation */
+  animation: glowPulse 3s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { text-shadow: 0 0 20px rgba(252, 238, 167, 0.5), 0 0 40px rgba(252, 238, 167, 0.2); }
+  50%       { text-shadow: 0 0 30px rgba(252, 238, 167, 0.9), 0 0 60px rgba(212, 175, 55, 0.5), 0 0 80px rgba(212, 175, 55, 0.2); }
 }
 
 .upload-wrapper {
@@ -43,13 +53,31 @@ h1 {
 .upload-btn:hover {
   background: #d4af37; color: #000; box-shadow: 0 0 15px rgba(212, 175, 55, 0.6);
 }
+
+/* [UI #9] Style cho trạng thái đang loading */
+.upload-btn.btn-loading {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+  letter-spacing: 1px;
+}
+.upload-btn.btn-loading::after {
+  content: '...';
+  animation: dotFlash 1s infinite;
+}
+
+@keyframes dotFlash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
 input[type="file"] { display: none; }
 
-/* --- POPUP HƯỚNG DẪN (MỚI) --- */
+/* --- POPUP HƯỚNG DẪN --- */
 .popup-overlay {
   position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0, 0, 0, 0.85); /* Nền tối làm nổi bật popup */
-  z-index: 200; /* Cao hơn mọi thứ */
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 200;
   display: flex; justify-content: center; align-items: center;
   backdrop-filter: blur(8px);
 }
@@ -90,11 +118,10 @@ input[type="file"] { display: none; }
   font-weight: 600;
 }
 
-/* Cập nhật cho icon */
 .guide-icon { 
   font-size: 28px; 
   margin-right: 25px; 
-  width: 35px; /* Tăng chiều rộng xíu để vừa icon trái tim */
+  width: 35px;
   text-align: center; 
 }
 
@@ -125,3 +152,47 @@ input[type="file"] { display: none; }
   animation: spin 1s linear infinite;
 }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* --- [UI #7] TOAST NOTIFICATION --- */
+.toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  padding: 12px 28px;
+  border-radius: 2px;
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.4s ease;
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+}
+
+.toast.toast-show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.toast-success {
+  background: rgba(0, 30, 0, 0.85);
+  border: 1px solid #d4af37;
+  color: #fceea7;
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+}
+
+.toast-error {
+  background: rgba(40, 0, 0, 0.85);
+  border: 1px solid #ff4444;
+  color: #ffaaaa;
+  box-shadow: 0 0 20px rgba(255, 50, 50, 0.3);
+}
+
+.toast-info {
+  background: rgba(0, 0, 30, 0.85);
+  border: 1px solid #4488ff;
+  color: #aaccff;
+  box-shadow: 0 0 20px rgba(50, 100, 255, 0.3);
+}
