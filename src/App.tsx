@@ -104,8 +104,8 @@ const App = () => {
             posHeart = new THREE.Vector3();
             baseScale: number;
             spinSpeed: THREE.Vector3;
-            originalMaterial: THREE.Material | THREE.Material[];
-            heartMaterial: THREE.Material;
+            originalMaterial!: THREE.Material | THREE.Material[];
+            heartMaterial!: THREE.Material;
 
             constructor(mesh: THREE.Mesh | THREE.Group, type: string) {
                 this.mesh = mesh;
